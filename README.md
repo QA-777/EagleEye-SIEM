@@ -80,7 +80,7 @@ python3 engine.py
 
 ### 5. Run the dashboard (separate terminal)
 ```bash
-uvicorn Dashboard.dashboard:app --reload --port 8000
+uvicorn dashboard:app --reload --port 8000
 ```
 
 Then open **http://localhost:8000** in your browser.
@@ -88,11 +88,13 @@ Then open **http://localhost:8000** in your browser.
 ---
 
 ## 📁 Project Structure
+
+```
 EagleEye-SIEM/
-├── engine.py                  # Main detection loop
-├── config.yaml                # Thresholds and settings
-├── whitelist.txt              # Trusted IPs (never alert on these)
-├── docker-compose.yml         # Elasticsearch + Logstash containers
+├── engine.py
+├── config.yaml
+├── whitelist.txt
+├── docker-compose.yml
 ├── detectors/
 │   ├── linux/
 │   │   ├── linux_auth.py
@@ -106,14 +108,14 @@ EagleEye-SIEM/
 │       ├── new_service.py
 │       └── powershell.py
 ├── ai_engine/
-│   └── groq_enrichment.py     # Groq AI enrichment module
+│   └── groq_enrichment.py
 ├── Dashboard/
-│   ├── dashboard.py           # FastAPI backend
+│   ├── dashboard.py
 │   └── templates/
-│       └── dashboard.html     # Live dashboard UI
+│       └── dashboard.html
 └── logstash/
-└── logstash.conf          # Log normalization pipeline
----
+    └── logstash.conf
+```
 
 ## 🔒 Security Notes
 
