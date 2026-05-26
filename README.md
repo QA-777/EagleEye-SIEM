@@ -32,17 +32,17 @@ EagleEye monitors system logs continuously and fires alerts when suspicious acti
 
 ## 🏗️ Architecture
 Log Sources (Linux auth.log / Windows Event Logs)
-↓
+->
 Filebeat / Winlogbeat
-↓
+->
 Logstash (normalization)
-↓
-Elasticsearch (storage)
-↓
+->
+E.lasticsearch (storage)
+->
 EagleEye Engine (detection rules)
-↓
+->
 Groq AI (alert enrichment → 3-step playbook)
-↓
+->
 Dashboard (live alerts + statistics)
 ---
 
