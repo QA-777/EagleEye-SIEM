@@ -127,6 +127,8 @@ EagleEye-SIEM/
 
 ---
 
-## 👨‍💻 Author
-
-Built as a Bachelor's graduation project.
+## 👨‍💻 Authors
+Qasem Fakhri Abu AlQasem
+Abdelrahman Adnan Bani Salameh
+Momen Ghazi Masaadeh
+Ali Mahmoud Mahameed
