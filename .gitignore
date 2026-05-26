@@ -1,0 +1,7 @@
+.env
+dedup.db
+*.log
+pycache/
+*.pyc
+siem_state.json
+siem_env

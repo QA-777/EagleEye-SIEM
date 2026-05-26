@@ -1,0 +1,15 @@
+# ==============================================================================
+# EagleEye SIEM — Brute Force IP Whitelist
+# ==============================================================================
+# Add one IP address per line.
+# Lines starting with # are comments and are ignored.
+# Restart engine.py after making changes for them to take effect.
+# ==============================================================================
+
+# Localhost
+#127.0.0.1
+#::1
+
+# Known admin machine — replace with your actual trusted IPs
+192.168.100.35
+

@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+    container_name: siem_elasticsearch
+    environment:
+      - discovery.type=single-node
+
+      # FIX 2A: Security is now ENABLED.
+      # With this set to true, Elasticsearch requires a username and password
+      # for every request. No more open access from anyone on the network.
+      - xpack.security.enabled=true
+
+      # FIX 2B: This sets the password for the built-in "elastic" superuser.
+      # We use an environment variable here so the password is NOT written
+      # directly in this file. Docker will read it from your .env file automatically
+      # because docker-compose loads .env from the same folder by default.
+      # Your .env file should contain: ELASTIC_PASSWORD=YourStrongPasswordHere
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+
+    ports:
+      - "9200:9200"
+    networks:
+      - siem_network
+
+    # FIX 2C: A health check tells Docker "don't consider Elasticsearch ready
+    # until it actually responds to requests." Without this, Logstash sometimes
+    # tries to connect before Elasticsearch has fully started and crashes.
+    # Breakdown of the command:
+    #   curl -s             = silent mode, no progress output
+    #   -u elastic:...      = authenticate with the elastic user and our password
+    #   localhost:9200      = check the local Elasticsearch port
+    #   The || exit 1 means: if curl fails, report the container as unhealthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -u elastic:${ELASTIC_PASSWORD} localhost:9200 || exit 1"]
+      interval: 15s   # Check every 15 seconds
+      timeout: 10s    # Give up if no response within 10 seconds
+      retries: 5      # Try 5 times before marking as unhealthy
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.1
+    container_name: siem_logstash
+    volumes:
+      - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+    ports:
+      - "5044:5044"
+
+    # FIX 2D: Pass the password into Logstash as an environment variable too.
+    # Your logstash.conf output block will use this to authenticate when
+    # writing logs into Elasticsearch (see the note below).
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+
+    # FIX 2E: Changed from depends_on with no condition, to waiting for the
+    # health check to pass. This means Logstash will only start AFTER
+    # Elasticsearch is confirmed healthy and ready to accept connections.
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+    networks:
+      - siem_network
+
+networks:
+  siem_network:
+    driver: bridge
+

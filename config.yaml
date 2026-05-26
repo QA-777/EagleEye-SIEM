@@ -1,0 +1,33 @@
+# ==============================================================================
+# EagleEye SIEM — Central Configuration File
+# ==============================================================================
+# Edit this file to tune the SIEM without touching any Python code.
+# Restart engine.py after making changes for them to take effect.
+# ==============================================================================
+
+elasticsearch:
+  host: "http://127.0.0.1:9200"
+  user: "elastic"
+  alerts_index: "siem_alerts"
+  winlogbeat_index: "winlogbeat-*"
+  filebeat_index: "filebeat-*"
+  request_timeout: 30
+
+engine:
+  # How often (in seconds) the engine runs all detection rules
+  poll_interval: 5
+  # How far back (in minutes) to look for events on each cycle
+  lookback_minutes: 10
+  # How many days before dedup records are deleted from the database
+  dedup_retention_days: 3
+
+
+linux_brute_force:
+  threshold: 5
+  window_minutes: 5
+
+ai:
+  model: "llama-3.1-8b-instant"
+  temperature: 0.3
+  max_tokens: 350
+

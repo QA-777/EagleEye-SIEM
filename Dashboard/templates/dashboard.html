@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>EagleEye SIEM</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+body            { background: #0d1117; font-size: 14px; }
+.navbar, .card  { background: #161b22 !important; border-bottom: 1px solid #30363d; }
+.card           { border: 1px solid #30363d; }
+
+.nav-tabs .nav-link        { color: #8b949e; border: none; }
+.nav-tabs .nav-link.active { color: #58a6ff; border-bottom: 2px solid #58a6ff; background: transparent; }
+.nav-tabs                  { border-bottom: 1px solid #30363d; }
+
+.table th             { color: #8b949e; font-size: 12px; text-transform: uppercase; border-color: #30363d; }
+.table td             { border-color: #21262d; vertical-align: middle; }
+.table tbody tr:hover { background: #1c2128 !important; cursor: pointer; }
+
+/* شارات الخطورة */
+.bH { background: #da3633; color: #fff; }
+.bM { background: #9e6a03; color: #fff; }
+.bL { background: #238636; color: #fff; }
+.bC { background: #6f0000; color: #fff; }
+
+/* ألوان الحالة والمصدر */
+.sO    { color: #f85149; }
+.sC    { color: #3fb950; }
+.src-w { color: #58a6ff; }
+.src-l { color: #3fb950; }
+
+/* بطاقات الإحصائيات */
+.sc { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1rem; text-align: center; }
+.sn { font-size: 2rem; font-weight: 700; line-height: 1; }
+
+/* النقطة النابضة */
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: #3fb950; animation: pulse-anim 2s infinite; display: inline-block; }
+@keyframes pulse-anim {
+  0%, 100% { opacity: 1; transform: scale(1);   }
+  50%       { opacity: .5; transform: scale(1.3); }
+}
+
+/* صندوق السجلات الخام */
+.mono {
+  background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+  padding: .75rem; font-family: monospace; font-size: 12px;
+  white-space: pre-wrap; max-height: 320px; overflow-y: auto; color: #79c0ff;
+}
+
+/* النوافذ المنبثقة */
+.modal-content                { background: #161b22; border: 1px solid #30363d; }
+.modal-header, .modal-footer  { border-color: #30363d; }
+
+/* ردود فعل زر الحفظ */
+.btn-save-success { border-color: #3fb950 !important; color: #3fb950 !important; }
+.btn-save-error   { border-color: #f85149 !important; color: #f85149 !important; }
+</style>
+</head>
+<body>
+
+<!-- ─── Navbar ─────────────────────────────────────────────────────────────── -->
+<nav class="navbar navbar-expand px-4 py-2">
+  <span class="navbar-brand fw-bold" style="color:#58a6ff">
+    <i class="bi bi-eye-fill me-2"></i>EagleEye SIEM
+  </span>
+  <div class="ms-auto d-flex align-items-center gap-3">
+    <span class="pulse"></span>
+    <small class="text-muted">Live</small>
+    <small id="lu" class="text-muted">—</small>
+    <small class="text-muted">Refresh: <b id="cd">10</b>s</small>
+  </div>
+</nav>
+
+<!-- ─── Main ───────────────────────────────────────────────────────────────── -->
+<div class="container-fluid px-4 pt-3">
+
+  <!-- التبويبات -->
+  <ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="nav-link active" data-tab="alerts" href="#"><i class="bi bi-shield-exclamation me-1"></i>Alerts</a></li>
+    <li class="nav-item"><a class="nav-link" data-tab="logs"   href="#"><i class="bi bi-terminal me-1"></i>Live Logs</a></li>
+    <li class="nav-item"><a class="nav-link" data-tab="stats"  href="#"><i class="bi bi-bar-chart-line me-1"></i>Statistics</a></li>
+  </ul>
+
+  <!-- ─── تبويب التنبيهات ─────────────────────────────────────────────────── -->
+  <div id="tab-alerts">
+    <div class="card d-flex flex-wrap flex-row gap-2 align-items-center p-2 mb-3">
+      <select id="fSev" class="form-select form-select-sm" style="width:130px" onchange="loadAlerts()">
+        <option value="all">All severities</option>
+        <option>HIGH</option><option>MEDIUM</option><option>LOW</option>
+      </select>
+      <select id="fSta" class="form-select form-select-sm" style="width:120px" onchange="loadAlerts()">
+        <option value="all">All statuses</option>
+        <option>Open</option><option>Closed</option>
+      </select>
+      <!-- حجم الصفحة — جديد -->
+      <select id="fSize" class="form-select form-select-sm" style="width:80px" onchange="loadAlerts()">
+        <option value="50">50</option>
+        <option value="100" selected>100</option>
+        <option value="250">250</option>
+      </select>
+      <input id="fSrc" class="form-control form-control-sm" style="width:200px"
+             placeholder="Search…" onkeyup="if(event.key==='Enter') loadAlerts()"/>
+      <button class="btn btn-sm btn-outline-secondary" onclick="loadAlerts()">
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
+      <span class="ms-auto text-muted" style="font-size:12px">
+        Total: <b id="aT">0</b> &nbsp; Open: <b id="aO" class="sO">0</b>
+      </span>
+    </div>
+    <div class="card">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th style="width:155px">Time</th>
+              <th style="width:80px">Severity</th>
+              <th>Message</th>
+              <th style="width:80px">Status</th>
+              <th style="width:80px">Action</th>
+            </tr>
+          </thead>
+          <tbody id="aBody">
+            <tr><td colspan="5" class="text-center text-muted p-4">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── تبويب السجلات ───────────────────────────────────────────────────── -->
+  <div id="tab-logs" style="display:none">
+    <div class="card d-flex flex-row align-items-center gap-2 p-2 mb-3">
+      <small class="text-muted">Source:</small>
+      <div class="btn-group btn-group-sm">
+        <button class="btn btn-primary"           data-s="both"    onclick="setLogSource('both')">Both</button>
+        <button class="btn btn-outline-secondary" data-s="windows" onclick="setLogSource('windows')"><i class="bi bi-windows me-1"></i>Windows</button>
+        <button class="btn btn-outline-secondary" data-s="linux"   onclick="setLogSource('linux')"><i class="bi bi-terminal me-1"></i>Linux</button>
+      </div>
+      <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="loadLogs()">
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
+      <small class="text-muted">Count: <b id="lC">0</b></small>
+    </div>
+    <div class="card">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th style="width:155px">Time</th>
+              <th style="width:90px">Source</th>
+              <th>Message</th>
+              <th style="width:60px">Raw</th>
+            </tr>
+          </thead>
+          <tbody id="lBody">
+            <tr><td colspan="4" class="text-center text-muted p-4">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── تبويب الإحصائيات ────────────────────────────────────────────────── -->
+  <div id="tab-stats" style="display:none">
+    <div class="row g-3 mb-4" id="scRow"></div>
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="card p-3">
+          <p class="text-muted mb-2" style="font-size:12px">SEVERITY</p>
+          <div style="height:200px"><canvas id="cSev"></canvas></div>
+        </div>
+      </div>
+      <div class="col-md-8">
+        <div class="card p-3">
+          <p class="text-muted mb-2" style="font-size:12px">ALERTS — LAST 24H</p>
+          <div style="height:200px"><canvas id="cTl"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- ─── نافذة تفاصيل التنبيه ──────────────────────────────────────────────── -->
+<div class="modal fade" id="aModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span id="mBadge" class="badge me-2"></span>
+        <h5 class="modal-title" style="font-size:14px">Alert Detail</h5>
+        <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex justify-content-between mb-1">
+          <small class="text-muted">Message</small>
+          <small id="mTs" class="text-muted"></small>
+        </div>
+        <div id="mMsg" class="mono mb-3" style="color:#e6edf3"></div>
+
+        <div id="mPbSec" style="display:none">
+          <small class="text-muted d-block mb-1"><i class="bi bi-robot me-1"></i>AI Playbook</small>
+          <div id="mPb" class="mono mb-3"></div>
+        </div>
+
+        <div id="mRawSec" style="display:none">
+          <small class="text-muted d-block mb-1">
+            <i class="bi bi-code-square me-1"></i>Original Raw Log
+            <span id="mRawIdx" class="text-muted" style="font-size:11px"></span>
+          </small>
+          <div id="mRaw" class="mono mb-3"></div>
+        </div>
+
+        <textarea id="mNote" class="form-control form-control-sm mb-1"
+                  rows="2" placeholder="Analyst note…"></textarea>
+        <!-- زر الحفظ مع ردود الفعل المرئية -->
+        <button id="btnSaveNote" class="btn btn-sm btn-outline-secondary mb-3" onclick="saveNote()">
+          Save note
+        </button>
+
+        <div class="d-flex gap-4" style="font-size:12px">
+          <span class="text-muted">Event ID: <span id="mEid">—</span></span>
+          <span class="text-muted">Status: <span id="mSta"></span></span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="mAct" class="btn btn-sm" onclick="toggleAlertStatus()"></button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="toggleRawLog()">
+          <i class="bi bi-code-square me-1"></i>Raw Log
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── نافذة السجل الخام ──────────────────────────────────────────────────── -->
+<div class="modal fade" id="lModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" style="font-size:14px">
+          <i class="bi bi-code-square me-2"></i>Raw Log — <span id="lIdx" class="text-muted"></span>
+        </h5>
+        <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <small class="text-muted">Time: <span id="lTime"></span></small>
+        <pre id="lRaw" class="mono mt-2"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ─── State ──────────────────────────────────────────────────────────────────
+let currentAlert = null;
+let logSource    = "both";
+let activeTab    = "alerts";
+let countdown    = 10;
+let refreshTimer = null;
+
+// مخزن للتنبيهات — تجنباً لحقن JSON في onclick
+const alertsMap = new Map();
+
+// مخططات Chart.js (للتحديث بدلاً من الإعادة)
+let severityChart  = null;
+let timelineChart  = null;
+
+// ─── Bootstrap modals ───────────────────────────────────────────────────────
+const alertModal = new bootstrap.Modal(document.getElementById("aModal"));
+const logModal   = new bootstrap.Modal(document.getElementById("lModal"));
+
+// ─── Utilities ──────────────────────────────────────────────────────────────
+// تهريب HTML لمنع XSS
+const escHtml = s => String(s)
+  .replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;")
+  .replace(/>/g, "&gt;");
+
+// تنسيق الوقت: 2025-04-29T14:30:00Z → 2025-04-29 14:30:00
+const formatTime = s => (s || "").replace("T", " ").slice(0, 19);
+
+// ربط الخطورة بفئة CSS
+const severityClass = { HIGH: "bH", MEDIUM: "bM", LOW: "bL", CRITICAL: "bC" };
+
+// اختصارات DOM
+const $   = id    => document.getElementById(id);
+const set = (id, v) => $(id).textContent = v;
+
+// ─── Tab switching ───────────────────────────────────────────────────────────
+document.querySelectorAll("[data-tab]").forEach(link => {
+  link.addEventListener("click", e => {
+    e.preventDefault();
+    document.querySelectorAll("[data-tab]").forEach(l => l.classList.remove("active"));
+    link.classList.add("active");
+    activeTab = link.dataset.tab;
+    document.querySelectorAll("[id^='tab-']").forEach(t => t.style.display = "none");
+    $("tab-" + activeTab).style.display = "";
+    refresh();
+  });
+});
+
+// ─── ALERTS ──────────────────────────────────────────────────────────────────
+async function loadAlerts() {
+  // حالة تحميل مرئية
+  $("aBody").innerHTML = `
+    <tr><td colspan="5" class="text-center text-muted p-4">
+      <span class="spinner-border spinner-border-sm me-2"></span>Loading…
+    </td></tr>`;
+
+  const params = new URLSearchParams({
+    severity: $("fSev").value,
+    status:   $("fSta").value,
+    search:   $("fSrc").value,
+    size:     $("fSize").value,
+  });
+
+  const data = await fetch(`/api/alerts?${params}`)
+    .then(r => r.json())
+    .catch(() => ({ alerts: [], total: 0 }));
+
+  set("aT", data.total || 0);
+  set("aO", (data.alerts || []).filter(a => a.status === "Open").length);
+
+  const tbody = $("aBody");
+
+  if (!data.alerts?.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted p-4">No alerts found</td></tr>`;
+    return;
+  }
+
+  // خزّن التنبيهات في Map وأنشئ الصفوف بـ data-id فقط — بدون حقن JSON
+  alertsMap.clear();
+  data.alerts.forEach(alert => alertsMap.set(alert.id, alert));
+
+  tbody.innerHTML = data.alerts.map(a => `
+    <tr data-id="${escHtml(a.id)}" class="alert-row">
+      <td style="font-size:12px;color:#8b949e">${formatTime(a.timestamp)}</td>
+      <td><span class="badge ${severityClass[a.severity] || "bL"}">${escHtml(a.severity || "LOW")}</span></td>
+      <td>${escHtml((a.message || "").split("\n")[0]).slice(0, 120)}</td>
+      <td class="${a.status === "Open" ? "sO" : "sC"}">${escHtml(a.status)}</td>
+      <td>
+        <button class="btn btn-sm btn-outline-secondary py-0 quick-toggle"
+                data-id="${escHtml(a.id)}" data-status="${escHtml(a.status)}">
+          ${a.status === "Open" ? "Close" : "Reopen"}
+        </button>
+      </td>
+    </tr>`).join("");
+
+  // مستمعو النقر على الصفوف — آمن بدون inline onclick
+  document.querySelectorAll(".alert-row").forEach(row => {
+    row.addEventListener("click", () => openAlert(alertsMap.get(row.dataset.id)));
+  });
+
+  // أزرار التغيير السريع — بدون فتح النافذة
+  document.querySelectorAll(".quick-toggle").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      quickToggleStatus(btn.dataset.id, btn.dataset.status, btn);
+    });
+  });
+}
+
+function openAlert(alert) {
+  if (!alert) return;
+  currentAlert = alert;
+
+  const parts = (alert.message || "").split(/\n\n(?=-->)/);
+  const playbook = parts.slice(1).join("\n\n").trim();
+
+  $("mBadge").className   = `badge ${severityClass[alert.severity] || "bL"}`;
+  $("mBadge").textContent = alert.severity;
+  set("mTs",  formatTime(alert.timestamp));
+  $("mMsg").textContent = parts[0] || "";
+
+  $("mPbSec").style.display = playbook ? "" : "none";
+  $("mPb").textContent      = playbook;
+
+  // أخفِ السجل الخام عند كل فتح جديد
+  $("mRawSec").style.display = "none";
+  $("mRaw").textContent      = "";
+  $("mRawIdx").textContent   = "";
+
+  $("mNote").value     = alert.analyst_note || "";
+  set("mEid", alert.source_event_id || "—");
+  $("mSta").textContent = alert.status;
+  $("mSta").className   = alert.status === "Open" ? "sO" : "sC";
+
+  $("mAct").textContent = alert.status === "Open" ? "Close Alert" : "Reopen Alert";
+  $("mAct").className   = `btn btn-sm ${alert.status === "Open" ? "btn-danger" : "btn-success"}`;
+
+  // أعِد زر الحفظ لحالته الأصلية
+  const saveBtn = $("btnSaveNote");
+  saveBtn.textContent = "Save note";
+  saveBtn.disabled    = false;
+  saveBtn.className   = "btn btn-sm btn-outline-secondary mb-3";
+
+  alertModal.show();
+}
+
+async function toggleRawLog() {
+  const section = $("mRawSec");
+
+  // toggle: لو ظاهر أخفِه
+  if (section.style.display !== "none") {
+    section.style.display = "none";
+    return;
+  }
+
+  const eventId = currentAlert?.source_event_id;
+  if (!eventId) {
+    $("mRaw").textContent = "No source event ID — brute force alerts use composite IDs.";
+    $("mRawIdx").textContent = "";
+    section.style.display = "";
+    return;
+  }
+
+  $("mRaw").textContent = "Fetching…";
+  section.style.display = "";
+
+  const data = await fetch(`/api/rawlog/${encodeURIComponent(eventId)}`)
+    .then(r => r.json())
+    .catch(() => ({ raw: null }));
+
+  $("mRaw").textContent    = data.raw
+    ? JSON.stringify(data.raw, null, 2)
+    : "Not found — may have been rotated out of Elasticsearch.";
+  $("mRawIdx").textContent = data.index ? `(${data.index})` : "";
+}
+
+async function toggleAlertStatus() {
+  if (!currentAlert) return;
+
+  const newStatus = currentAlert.status === "Open" ? "Closed" : "Open";
+
+  // تأكيد قبل الإغلاق — لمنع الأخطاء العرضية
+  if (!confirm(`Mark this alert as "${newStatus}"?`)) return;
+
+  await fetch(`/api/alerts/${currentAlert.id}/status`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ value: newStatus }),
+  });
+
+  alertModal.hide();
+  loadAlerts();
+}
+
+async function quickToggleStatus(id, currentStatus, btn) {
+  btn.disabled   = true;
+  const newStatus = currentStatus === "Open" ? "Closed" : "Open";
+
+  await fetch(`/api/alerts/${id}/status`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ value: newStatus }),
+  });
+
+  loadAlerts();
+}
+
+async function saveNote() {
+  if (!currentAlert) return;
+
+  const btn = $("btnSaveNote");
+  btn.textContent = "Saving…";
+  btn.disabled    = true;
+
+  try {
+    const resp = await fetch(`/api/alerts/${currentAlert.id}/note`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ value: $("mNote").value }),
+    });
+
+    if (!resp.ok) throw new Error("Server error");
+
+    // تأكيد مرئي للنجاح
+    btn.textContent = "Saved ✓";
+    btn.classList.add("btn-save-success");
+  } catch {
+    btn.textContent = "Failed ✗";
+    btn.classList.add("btn-save-error");
+  } finally {
+    // إعادة الزر لحالته بعد ثانيتين
+    setTimeout(() => {
+      btn.textContent = "Save note";
+      btn.disabled    = false;
+      btn.className   = "btn btn-sm btn-outline-secondary mb-3";
+    }, 2000);
+  }
+}
+
+// ─── LOGS ─────────────────────────────────────────────────────────────────────
+function setLogSource(src) {
+  logSource = src;
+  document.querySelectorAll("[data-s]").forEach(btn => {
+    btn.className = "btn btn-sm " + (btn.dataset.s === src ? "btn-primary" : "btn-outline-secondary");
+  });
+  loadLogs();
+}
+
+async function loadLogs() {
+  $("lBody").innerHTML = `
+    <tr><td colspan="4" class="text-center text-muted p-4">
+      <span class="spinner-border spinner-border-sm me-2"></span>Loading…
+    </td></tr>`;
+
+  const data = await fetch(`/api/logs?source=${logSource}&size=100`)
+    .then(r => r.json())
+    .catch(() => ({ logs: [] }));
+
+  const logs = data.logs || [];
+  set("lC", logs.length);
+
+  const tbody = $("lBody");
+  if (!logs.length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted p-4">No logs</td></tr>`;
+    return;
+  }
+
+  // مخزن السجلات للاستخدام عند فتح النافذة
+  const logsMap = new Map(logs.map(l => [l.id, l]));
+
+  tbody.innerHTML = logs.map(l => `
+    <tr data-log-id="${escHtml(l.id)}">
+      <td style="font-size:12px;color:#8b949e">${formatTime(l.timestamp)}</td>
+      <td class="${l.source_type === "Windows" ? "src-w" : "src-l"}">
+        <i class="bi bi-${l.source_type === "Windows" ? "windows" : "terminal"} me-1"></i>
+        ${escHtml(l.source_type)}
+      </td>
+      <td style="font-size:13px">${escHtml((l.message || "").slice(0, 150))}</td>
+      <td>
+        <button class="btn btn-sm btn-outline-secondary py-0 log-raw-btn"
+                data-log-id="${escHtml(l.id)}">Raw</button>
+      </td>
+    </tr>`).join("");
+
+  document.querySelectorAll(".log-raw-btn").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      openRawLog(logsMap.get(btn.dataset.logId));
+    });
+  });
+}
+
+function openRawLog(log) {
+  if (!log) return;
+  set("lIdx",  log.index || "—");
+  set("lTime", formatTime(log.timestamp));
+  $("lRaw").textContent = JSON.stringify(log.raw, null, 2);
+  logModal.show();
+}
+
+// ─── STATS ────────────────────────────────────────────────────────────────────
+async function loadStats() {
+  const data = await fetch("/api/stats")
+    .then(r => r.json())
+    .catch(() => ({ total: 0, open: 0, closed: 0, high: 0, medium: 0, low: 0, timeline: [] }));
+
+  // بطاقات الإحصائيات
+  const statCards = [
+    ["Total",  "#e6edf3", data.total],
+    ["Open",   "#f85149", data.open],
+    ["Closed", "#3fb950", data.closed],
+    ["HIGH",   "#da3633", data.high],
+    ["MEDIUM", "#9e6a03", data.medium],
+    ["LOW",    "#238636", data.low],
+  ];
+  $("scRow").innerHTML = statCards.map(([label, color, value]) => `
+    <div class="col-6 col-md-2">
+      <div class="sc">
+        <div class="sn" style="color:${color}">${value ?? 0}</div>
+        <div class="text-muted" style="font-size:12px">${label}</div>
+      </div>
+    </div>`).join("");
+
+  // ─── المخطط الدائري — تحديث البيانات بدلاً من الإعادة الكاملة ───────────
+  const sevData = [data.high, data.medium, data.low];
+
+  if (severityChart) {
+    // تحديث فقط — بدون وميض أو هدر للذاكرة
+    severityChart.data.datasets[0].data = sevData;
+    severityChart.update("none");
+  } else {
+    const ctx = $("cSev").getContext("2d");
+    severityChart = new Chart(ctx, {
+      type: "doughnut",
+      data: {
+        labels:   ["HIGH", "MEDIUM", "LOW"],
+        datasets: [{
+          data:            sevData,
+          backgroundColor: ["#da3633", "#9e6a03", "#238636"],
+          borderColor:     "#161b22",
+          borderWidth:     3,
+        }],
+      },
+      options: {
+        responsive:          true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: "#8b949e", font: { size: 12 } } } },
+      },
+    });
+  }
+
+  // ─── مخطط خط الزمن — تحديث البيانات بدلاً من الإعادة الكاملة ─────────
+  const timeline = data.timeline || [];
+  const tlLabels = timeline.map(x => x.t);
+  const tlData   = timeline.map(x => x.c);
+
+  if (timelineChart) {
+    timelineChart.data.labels              = tlLabels;
+    timelineChart.data.datasets[0].data   = tlData;
+    timelineChart.update("none");
+  } else {
+    const ctx = $("cTl").getContext("2d");
+    timelineChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels:   tlLabels,
+        datasets: [{
+          label:           "Alerts",
+          data:            tlData,
+          borderColor:     "#58a6ff",
+          backgroundColor: "rgba(88,166,255,.1)",
+          fill:            true,
+          tension:         .3,
+          pointRadius:     3,
+        }],
+      },
+      options: {
+        responsive:          true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { ticks: { color: "#8b949e", font: { size: 11 }, maxRotation: 45 }, grid: { color: "#21262d" } },
+          y: { ticks: { color: "#8b949e", font: { size: 11 }, stepSize: 1 },     grid: { color: "#21262d" }, beginAtZero: true },
+        },
+        plugins: { legend: { labels: { color: "#8b949e", font: { size: 12 } } } },
+      },
+    });
+  }
+}
+
+// ─── Auto-refresh ─────────────────────────────────────────────────────────────
+function refresh() {
+  set("lu", new Date().toLocaleTimeString());
+  if      (activeTab === "alerts") loadAlerts();
+  else if (activeTab === "logs")   loadLogs();
+  else                             loadStats();
+}
+
+function tick() {
+  countdown--;
+  set("cd", countdown);
+  if (countdown <= 0) {
+    countdown = 10;
+    refresh();
+  }
+}
+
+// إيقاف التحديث عند إخفاء الصفحة — توفير الموارد
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    clearInterval(refreshTimer);
+  } else {
+    refreshTimer = setInterval(tick, 1000);
+    refresh(); // تحديث فوري عند العودة للتبويب
+  }
+});
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+loadAlerts();
+refreshTimer = setInterval(tick, 1000);
+</script>
+</body>
+</html>
